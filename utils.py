@@ -2,15 +2,9 @@ import pandas as pd
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.decomposition import PCA
 from sklearn.metrics.pairwise import rbf_kernel
-from sklearn.metrics import precision_recall_fscore_support,accuracy_score, precision_score, recall_score, f1_score
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import PolynomialFeatures
-from sklearn.metrics.pairwise import rbf_kernel
+from sklearn.metrics import precision_recall_fscore_support,accuracy_score
 from sklearn.base import clone
 from sklearn.model_selection import ParameterGrid
-
-
-
 
 
 def preprocess_credit_card_data(df):
@@ -38,15 +32,6 @@ def preprocess_credit_card_data(df):
     return df
 
 
-
-
-from sklearn.model_selection import ParameterGrid
-from sklearn.base import clone
-from sklearn.metrics import accuracy_score, precision_recall_fscore_support
-from sklearn.preprocessing import PolynomialFeatures
-from sklearn.decomposition import PCA
-from sklearn.metrics.pairwise import rbf_kernel
-
 def grid_evaluate(
     estimator,
     param_grid,
@@ -57,6 +42,7 @@ def grid_evaluate(
     Custom grid search with optional feature transforms and model-specific parameters.
     Returns a tuple: (results_dataframe, best_trained_model)
     """
+
     rows = []
     best_f1 = -1
     best_model = None
@@ -108,7 +94,7 @@ def grid_evaluate(
         )
 
         # save best model
-        if f1_val > best_f1:
+        if f1_val >= best_f1:
             best_f1 = f1_val
             best_model = clf  # already fitted
 
@@ -135,62 +121,8 @@ def grid_evaluate(
         record.update(params)  # add remaining hyperparameters
         rows.append(record)
 
+        #print progress per parameter combination tried
         if i % 5 == 0:
             print(f"Evaluated {i} parameter combinations...")
 
     return pd.DataFrame(rows), best_model
-
-def test_models_on_df(models, params_list, test_df, target_col='target'):
-    """
-    models      : list of fitted estimator objects [nn_model, log_model, svm_model]
-    params_list : list of pd.Series of hyper-params matching each model
-    test_df     : the DataFrame containing both features and the target
-    target_col  : name of the label column in test_df
-    ---
-    returns a DataFrame with columns:
-      model_name, accuracy, precision, recall, f1
-    """
-    # split out features / target
-    y_true = test_df[target_col]
-    X      = test_df.drop(columns=[target_col])
-
-    results = []
-    for model, p in zip(models, params_list):
-        # build a fresh copy so we don't pollute the original
-        clf = clone(model)
-
-        # we need to apply the SAME feature transform that was used in training:
-        fm = p.get('feature_method', None)
-
-        if fm == 'polynomial':
-            poly = PolynomialFeatures(degree=int(p['degree']), include_bias=False)
-            X_proc = poly.fit_transform(X)
-
-        elif fm == 'pca':
-            pca = PCA(n_components=int(p['n_components']))
-            X_proc = pca.fit_transform(X)
-
-        elif fm == 'rbf':
-            # RBF: compute kernel against training “basis” from the fitted SVM
-            # we assume the saved model has a `.support_` attribute
-            X_basis = clf.support_vectors_
-            X_proc  = rbf_kernel(X, X_basis, gamma=p['gamma'])
-
-        else:
-            # linear / no extra transform
-            X_proc = X.values  # as numpy array
-
-        # now predict & score
-        y_pred = clf.predict(X_proc)
-
-        results.append({
-            'model_name':        clf.__class__.__name__,
-            'feature_method':    fm or 'linear',
-            'accuracy':          accuracy_score(y_true, y_pred),
-            'precision':         precision_score(y_true, y_pred),
-            'recall':            recall_score(y_true, y_pred),
-            'f1':                f1_score(y_true, y_pred)
-        })
-
-    return pd.DataFrame(results)
-
